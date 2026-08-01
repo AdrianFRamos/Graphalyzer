@@ -417,6 +417,3 @@ Para dúvidas ou problemas:
 - [Anthropic Claude API](https://www.anthropic.com/api)
 - [OpenAI API](https://openai.com/api/)
 
----
-
-**Desenvolvido com ❤️ por Manus AI**
