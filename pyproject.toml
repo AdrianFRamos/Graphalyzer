@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphalyzer"
+version = "1.0.0"
+description = "Grafo de dependências e fluxo de dados de projetos Python, com documentação automática"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+# Python é analisado pelo `ast` da stdlib; as demais linguagens vêm das
+# gramáticas do tree-sitter, distribuídas já compiladas.
+dependencies = [
+    "tree-sitter>=0.23",
+    "tree-sitter-language-pack>=0.7",
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.100.0", "uvicorn>=0.23.0", "pydantic>=2.0.0"]
+ai = ["anthropic>=0.40.0", "openai>=1.0.0"]
+dev = ["pytest>=7.0", "httpx>=0.24"]
+
+[project.scripts]
+graphalyzer = "graphalyzer.cli:main"
+graphalyzer-api = "graphalyzer.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# `web/*` não pega o subdiretório assets/ gerado pelo Vite — precisa ser recursivo
+graphalyzer = ["web/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

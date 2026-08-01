@@ -1,0 +1,50 @@
+services:
+  graphalyzer:
+    build: .
+    image: graphalyzer:latest
+
+    ports:
+      # 127.0.0.1 no lado do host é a trava que importa: sem esse prefixo o
+      # Docker publica em 0.0.0.0 e expõe na rede uma API sem autenticação
+      # que lê arquivos arbitrários do disco.
+      - "127.0.0.1:5000:5000"
+
+    volumes:
+      # A pasta de usuário inteira, somente leitura: assim qualquer projeto
+      # vira /projects/<nome> sem precisar editar este arquivo a cada vez.
+      #
+      # Contrapartida: a API passa a poder LER qualquer arquivo aqui dentro e
+      # devolver o conteúdo. Ela só escuta em 127.0.0.1, mas se quiser reduzir
+      # o alcance, troque por montagens específicas:
+      #     - C:/Users/bahni/GBOrganiza:/projects/GBOrganiza:ro
+      #     - ./:/projects/graphalyzer:ro
+      - C:/Users/bahni:/projects:ro
+
+      # Cache e saídas sobrevivem ao container
+      - graphalyzer-data:/data
+
+    environment:
+      # Qual pasta do host está montada em /projects. Com isso o dashboard
+      # aceita o caminho do jeito que você conhece (C:\Users\bahni\Projeto) e
+      # traduz sozinho. Mantenha igual ao lado esquerdo do volume acima.
+      - GRAPHALYZER_HOST_ROOT=C:/Users/bahni
+
+      # Descomente para usar análise semântica por IA
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GRAPHALYZER_AI_MODEL=claude-sonnet-5
+
+    restart: unless-stopped
+
+    # A análise é toda em CPU e memória; sem teto, um projeto grande pode
+    # consumir a máquina inteira.
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  graphalyzer-data:

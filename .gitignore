@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+.pytest_cache/
+.graphalyzer_cache/
+analysis_output/
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# O build do Vite (src/graphalyzer/web/) é versionado de propósito: assim
+# `pip install` entrega o dashboard pronto, sem exigir Node na máquina.

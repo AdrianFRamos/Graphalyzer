@@ -1,0 +1,28 @@
+# Tudo que não deve entrar no contexto de build: acelera o build e evita
+# vazar artefatos locais para dentro da imagem.
+
+.git/
+.gitignore
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+node_modules/
+frontend/dist/
+
+.graphalyzer_cache/
+analysis_output*/
+
+docs/
+scripts/
+tests/
+
+Dockerfile
+.dockerignore
+docker-compose.yml
