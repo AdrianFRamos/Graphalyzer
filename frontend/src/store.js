@@ -4,6 +4,11 @@ import { api } from './api'
 
 const STORAGE_KEY = 'graphalyzer:ultima-analise'
 
+// Subir este número descarta snapshots gravados por versões antigas. Sem isso,
+// um campo novo (como a pasta do nó) fica faltando no que veio do disco e a
+// tela mostra dados incompletos sem nenhum sinal de erro.
+const VERSAO_DO_SNAPSHOT = 2
+
 // A análise roda no backend local: sem ele não há como analisar nada novo.
 // O que o PWA guarda é o último resultado, para consulta offline — que é o
 // caso de uso real de uma ferramenta de documentação.
@@ -17,7 +22,9 @@ function persist(snapshot) {
 
 function restore() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+    const dados = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+    if (dados?.versao !== VERSAO_DO_SNAPSHOT) return null
+    return dados
   } catch {
     return null
   }
@@ -26,16 +33,18 @@ function restore() {
 const state = reactive({
   analysisId: null,
   project: null, // { project_name, project_path, file_count, ... }
+  projectPath: '', // caminho submetido, para reanalisar sem depender da resposta
   graph: { nodes: [], edges: [] },
   metrics: null,
   nodeDetails: null,
   nodeCache: {}, // detalhes já buscados, para funcionarem offline
   viewType: 'file',
-  layout: 'cose',
+  layout: 'fcose', // rápido e estável mesmo com milhares de nós
   loading: null, // string com a mensagem, ou null
   error: null,
   offline: false,
   restoredFromCache: false,
+  _revalidando: false,
 })
 
 const hasAnalysis = computed(() => state.project !== null)
@@ -52,10 +61,12 @@ function snapshot() {
   return {
     analysisId: state.analysisId,
     project: state.project,
+    projectPath: state.projectPath,
     graph: state.graph,
     metrics: state.metrics,
     nodeCache: state.nodeCache,
     viewType: state.viewType,
+    versao: VERSAO_DO_SNAPSHOT,
     savedAt: new Date().toISOString(),
   }
 }
@@ -69,6 +80,7 @@ const actions = {
     Object.assign(state, {
       analysisId: saved.analysisId,
       project: saved.project,
+      projectPath: saved.projectPath || saved.project?.project_path || '',
       graph: saved.graph || { nodes: [], edges: [] },
       metrics: saved.metrics,
       nodeCache: saved.nodeCache || {},
@@ -93,6 +105,7 @@ const actions = {
       const result = await api.analyze(projectPath.trim(), options)
       state.analysisId = result.analysis_id
       state.project = result
+      state.projectPath = result.project_path || projectPath.trim()
       state.restoredFromCache = false
       state.offline = false
 
@@ -107,6 +120,31 @@ const actions = {
     }
   },
 
+  /** Refaz a análise quando o servidor não conhece mais o id guardado.
+   *
+   * A store de análises do servidor é em memória e morre a cada reinício,
+   * enquanto o navegador guarda o id em localStorage. Sem isto o usuário
+   * ficaria olhando um grafo velho e recebendo 404 em silêncio. A reanálise é
+   * barata porque o cache em disco do servidor sobrevive ao reinício.
+   */
+  async _revalidar() {
+    const caminho = state.projectPath || state.project?.project_path
+    if (!caminho || state._revalidando) return false
+
+    state._revalidando = true
+    try {
+      const result = await api.analyze(caminho)
+      state.analysisId = result.analysis_id
+      state.project = result
+      state.projectPath = result.project_path || caminho
+      return true
+    } catch {
+      return false
+    } finally {
+      state._revalidando = false
+    }
+  },
+
   async loadGraph() {
     if (!state.analysisId) return
 
@@ -114,6 +152,9 @@ const actions = {
       state.graph = await api.graph(state.analysisId, state.viewType)
       persist(snapshot())
     } catch (error) {
+      if (error.status === 404 && (await actions._revalidar())) {
+        return actions.loadGraph()
+      }
       state.error = error.message
       state.offline = error.status === 0
     }
@@ -155,6 +196,9 @@ const actions = {
       state.nodeDetails = detail
       persist(snapshot())
     } catch (error) {
+      if (error.status === 404 && (await actions._revalidar())) {
+        return actions.selectNode(nodeId)
+      }
       state.error = error.message
       state.offline = error.status === 0
     }

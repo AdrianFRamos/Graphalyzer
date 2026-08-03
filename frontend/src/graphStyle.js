@@ -1,106 +1,237 @@
-// Estilo do grafo. Mesma linguagem visual do HTML exportado pelo backend:
-// import cinza tracejado, chamada azul, fluxo de dados verde com a variável
-// escrita em cima — é a aresta que dá sentido ao grafo.
-export const cytoscapeStyle = [
-  {
-    selector: 'node',
-    style: {
-      content: 'data(label)',
-      'text-valign': 'center',
-      'text-halign': 'center',
-      'background-color': 'data(color)',
-      width: 60,
-      height: 60,
-      'font-size': 10,
-      color: '#fff',
-      'text-wrap': 'wrap',
-      'text-max-width': 55,
-      'border-width': 2,
-      'border-color': '#fff',
-    },
-  },
-  {
-    selector: 'edge',
-    style: {
-      'target-arrow-shape': 'triangle',
-      'line-color': '#ccc',
-      'target-arrow-color': '#ccc',
-      width: 2,
-      'curve-style': 'bezier',
-    },
-  },
-  {
-    // Contenção (arquivo → função): estrutural, fica em segundo plano
-    selector: 'edge[type = "uses"]',
-    style: {
-      'line-color': '#e2e8f0',
-      'target-arrow-color': '#e2e8f0',
-      width: 1,
-    },
-  },
-  {
-    selector: 'edge[type = "import"]',
-    style: {
-      'line-color': '#64748b',
-      'target-arrow-color': '#64748b',
-      'line-style': 'dashed',
-    },
-  },
-  {
-    selector: 'edge[type = "calls"]',
-    style: {
-      'line-color': '#3b82f6',
-      'target-arrow-color': '#3b82f6',
-    },
-  },
-  {
-    selector: 'edge[type = "data_flow"]',
-    style: {
-      'line-color': '#22c55e',
-      'target-arrow-color': '#22c55e',
-      width: 3,
-      label: 'data(label)',
-      'font-size': 9,
-      color: '#15803d',
-      'text-background-color': '#fff',
-      'text-background-opacity': 0.85,
-      'text-background-padding': 2,
-    },
-  },
-  {
-    selector: 'node:selected',
-    style: {
-      'background-color': '#ef4444',
-      width: 80,
-      height: 80,
-      'border-width': 3,
-      'border-color': '#b91c1c',
-    },
-  },
-  {
-    selector: 'edge:selected',
-    style: {
-      'line-color': '#ef4444',
-      'target-arrow-color': '#ef4444',
-      width: 3,
-    },
-  },
+// Estilo do grafo, no espírito do "graph view" do Obsidian: pontos pequenos
+// dimensionados pelo número de conexões, links finos sem seta, rótulo só
+// quando há zoom, e o resto apagado quando algo está em foco.
+
+// No Obsidian a maioria dos nós é neutra e a cor é exceção. Tingir tudo por
+// tipo deixa o grafo com cara de diagrama, não de constelação.
+export const CORES = {
+  fundo: '#191a23',
+  no: '#c3c9dd',
+  file: '#8ab4f8',
+  class: '#e0af68',
+  function: '#c3c9dd',
+  module: '#9aa5ce',
+  link: '#454b66',
+  data_flow: '#4c7a63',
+  calls: '#42597f',
+  import: '#5b5478',
+  destaque: '#f7768e',
+  texto: '#d5dbf0',
+}
+
+// Grau -> diâmetro. É a marca visual do Obsidian: o que é muito referenciado
+// aparece grande sem precisar de rótulo.
+const TAMANHO_MIN = 7
+const TAMANHO_MAX = 38
+
+// Paleta para colorir por pasta. Matizes bem separados e saturação parecida,
+// para nenhuma pasta parecer mais importante que outra.
+export const PALETA_PASTAS = [
+  '#7aa2f7',
+  '#9ece6a',
+  '#e0af68',
+  '#bb9af7',
+  '#7dcfff',
+  '#f7768e',
+  '#73daca',
+  '#ff9e64',
+  '#c0caf5',
+  '#b4f9f8',
+  '#d19a66',
+  '#a6e3a1',
+  '#f5c2e7',
+  '#89dceb',
+  '#eba0ac',
+  '#94e2d5',
 ]
+
+/** Agrupa a pasta até a profundidade pedida: `a/b/c/d` com 2 vira `a/b`. */
+export function grupoDaPasta(pasta, profundidade) {
+  return (pasta || '').split('/').slice(0, profundidade).join('/')
+}
+
+/** Profundidade que melhor separa as pastas sem esgotar a paleta.
+ *
+ * Colorir pela pasta completa parece o certo, mas um projeto real tem dezenas
+ * de subpastas: as cores passam a se repetir e deixam de significar algo.
+ * Pega-se a maior profundidade cujos grupos ainda cabem na paleta.
+ */
+export function profundidadeIdeal(nodes) {
+  const pastas = nodes.map((n) => n.data.folder || '')
+  let escolhida = 1
+
+  for (let d = 1; d <= 6; d++) {
+    const grupos = new Set(pastas.map((p) => grupoDaPasta(p, d)))
+    if (grupos.size > PALETA_PASTAS.length) break
+    escolhida = d
+    // Já separou tudo o que havia para separar
+    if (grupos.size === new Set(pastas).size) break
+  }
+
+  return escolhida
+}
+
+/** Mapa grupo-de-pasta -> cor, estável: o mesmo grupo recebe sempre a mesma cor. */
+export function coresPorPasta(nodes, profundidade = null) {
+  const d = profundidade ?? profundidadeIdeal(nodes)
+  const grupos = [
+    ...new Set(nodes.map((n) => grupoDaPasta(n.data.folder || '', d))),
+  ].sort()
+
+  const mapa = new Map()
+  grupos.forEach((grupo, i) => {
+    mapa.set(grupo, PALETA_PASTAS[i % PALETA_PASTAS.length])
+  })
+  mapa.profundidade = d
+
+  return mapa
+}
+
+export function cytoscapeStyle() {
+  return [
+    {
+      selector: 'node',
+      style: {
+        // A cor vem da pasta (atribuída no canvas); o tipo deixa de pintar
+        'background-color': 'data(corDaPasta)',
+        width: `mapData(grau, 0, 20, ${TAMANHO_MIN}, ${TAMANHO_MAX})`,
+        height: `mapData(grau, 0, 20, ${TAMANHO_MIN}, ${TAMANHO_MAX})`,
+        'border-width': 0,
+        label: 'data(label)',
+        'font-size': 7,
+        'text-valign': 'bottom',
+        'text-margin-y': 4,
+        color: CORES.texto,
+        'text-opacity': 0, // só aparece com zoom ou foco
+        'text-outline-width': 2,
+        'text-outline-color': CORES.fundo,
+        'min-zoomed-font-size': 6,
+        'transition-property': 'opacity, background-color',
+        'transition-duration': '120ms',
+      },
+    },
+    // Arquivo ganha contorno para se distinguir de função/classe sem mudar
+    // a cor, que agora significa pasta
+    {
+      selector: 'node[type = "file"]',
+      style: { 'border-width': 2, 'border-color': '#e8ecfb', 'border-opacity': 0.55 },
+    },
+    {
+      selector: 'edge',
+      style: {
+        width: 0.6,
+        'line-color': CORES.link,
+        'curve-style': 'straight',
+        'target-arrow-shape': 'none', // Obsidian não desenha setas
+        opacity: 0.55,
+        'transition-property': 'opacity, line-color',
+        'transition-duration': '120ms',
+      },
+    },
+    // O tipo da aresta continua legível, mas discreto: o fluxo de dados é o
+    // que dá sentido ao grafo e não pode sumir no visual novo.
+    {
+      selector: 'edge[type = "data_flow"]',
+      style: { 'line-color': CORES.data_flow, width: 0.9 },
+    },
+    { selector: 'edge[type = "calls"]', style: { 'line-color': CORES.calls } },
+    {
+      selector: 'edge[type = "import"]',
+      style: { 'line-color': CORES.import, 'line-style': 'dashed' },
+    },
+
+    // Rótulos ligados por zoom
+    { selector: 'node.com-rotulo', style: { 'text-opacity': 0.9 } },
+
+    // Foco: o alvo e a vizinhança acesos, o resto apagado
+    { selector: '.apagado', style: { opacity: 0.08, 'text-opacity': 0 } },
+    {
+      selector: 'node.vizinho',
+      style: { 'text-opacity': 0.95, 'z-index': 10 },
+    },
+    {
+      selector: 'node.foco',
+      style: {
+        'background-color': CORES.destaque,
+        'text-opacity': 1,
+        'border-width': 2,
+        'border-color': CORES.destaque,
+        'border-opacity': 0.35,
+        'z-index': 20,
+      },
+    },
+    {
+      selector: 'edge.vizinho',
+      style: { opacity: 1, width: 1.4, 'line-color': CORES.destaque },
+    },
+    {
+      selector: 'node:selected',
+      style: {
+        'background-color': CORES.destaque,
+        'text-opacity': 1,
+        'z-index': 20,
+      },
+    },
+  ]
+}
 
 export const EDGE_LEGEND = [
-  { type: 'data_flow', color: '#22c55e', label: 'Fluxo de dados' },
-  { type: 'calls', color: '#3b82f6', label: 'Chamada' },
-  { type: 'import', color: '#64748b', label: 'Import' },
-  { type: 'uses', color: '#cbd5e1', label: 'Contém' },
+  { type: 'data_flow', color: CORES.data_flow, label: 'Fluxo de dados' },
+  { type: 'calls', color: CORES.calls, label: 'Chamada' },
+  { type: 'import', color: CORES.import, label: 'Import' },
+  { type: 'uses', color: CORES.link, label: 'Contém' },
 ]
 
-export function layoutOptions(name) {
-  return {
-    name,
-    directed: true,
-    animate: true,
-    animationDuration: 400,
-    fit: true,
-    padding: 30,
+// Acima deste tamanho, simulação contínua trava o navegador — um projeto real
+// chega fácil a 4 mil nós.
+export const LIMITE_FISICA_VIVA = 700
+
+export function layoutOptions(nome, quantidadeDeNos = 0) {
+  // `handleDisconnected` fica desligado em todos: os órfãos são posicionados
+  // à parte, num anel. Ligado, o cola alinha os desconectados numa fileira —
+  // era isso que transformava o grafo numa linha de pontos.
+  if (nome === 'cola') {
+    return {
+      name: 'cola',
+      animate: true,
+      infinite: true, // a simulação não termina: arrastar reorganiza os vizinhos
+      fit: false,
+      nodeSpacing: 8,
+      edgeLength: 70,
+      randomize: true,
+      handleDisconnected: false,
+      convergenceThreshold: 0.01,
+    }
   }
+
+  if (nome === 'fcose') {
+    return {
+      name: 'fcose',
+      quality: quantidadeDeNos > 2000 ? 'draft' : 'default',
+      animate: false, // animar milhares de nós custa mais que o layout
+      randomize: true,
+      fit: true,
+      padding: 60,
+      nodeRepulsion: 6000,
+      idealEdgeLength: 60,
+      edgeElasticity: 0.35,
+      gravity: 0.3,
+      numIter: quantidadeDeNos > 2000 ? 1200 : 2500,
+    }
+  }
+
+  if (nome === 'cose-bilkent') {
+    return {
+      name: 'cose-bilkent',
+      animate: 'end',
+      animationDuration: 500,
+      randomize: true,
+      nodeRepulsion: 6000,
+      idealEdgeLength: 60,
+      fit: true,
+      padding: 50,
+    }
+  }
+
+  return { name: nome, animate: true, animationDuration: 400, fit: true, padding: 50 }
 }

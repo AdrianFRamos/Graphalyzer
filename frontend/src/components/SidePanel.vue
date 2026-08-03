@@ -93,8 +93,9 @@ const EXPORTS = [
           :value="store.layout"
           @change="actions.setLayout($event.target.value)"
         >
-          <option value="cose-bilkent">COSE Bilkent</option>
-          <option value="cose">COSE</option>
+          <option value="fcose">Força (rápido)</option>
+          <option value="cola">Força (viva, até 700 nós)</option>
+          <option value="cose-bilkent">Força (clássico)</option>
           <option value="grid">Grade</option>
           <option value="circle">Círculo</option>
           <option value="concentric">Concêntrico</option>

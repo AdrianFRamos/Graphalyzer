@@ -92,6 +92,15 @@ class GraphBuilder:
                 docstring=file_info.docstring,
                 source_code=file_info.source_code,
                 is_public=not file_info.module_name.startswith("_"),
+                metadata={
+                    # A documentação precisa listar as dependências externas,
+                    # que não viram aresta do grafo (só imports internos viram).
+                    "imports": sorted(
+                        {i.module for i in file_info.imports if i.module}
+                    ),
+                    "language": file_info.language,
+                    "filename": Path(file_path).name,
+                },
             )
             self.graph.add_node(file_node)
 

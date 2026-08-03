@@ -66,10 +66,41 @@ EXCLUDE_DIRS = [
     "obj",
     "bin",
     "vendor",
+    # Perfis de navegador embutidos no projeto: automações com Selenium
+    # deixam um profile inteiro no repositório, cheio de código de extensão
+    # que não é do usuário. Nomes variam, então o padrão é com curinga.
+    "chrome_profile*",
+    "*_profile",
+    "Extensions",
+    "Crashpad",
+    "Code Cache",
+    "Service Worker",
+    "IndexedDB",
+    "Local Storage",
+    "WasmTtsEngine",
     # Genéricos
     "build",
     "out",
 ]
+
+# Pastas extras do usuário, separadas por vírgula. Aceita curinga:
+#   GRAPHALYZER_EXCLUDE_EXTRA=dados_brutos,*.bak
+EXCLUDE_DIRS += [
+    nome.strip()
+    for nome in os.getenv("GRAPHALYZER_EXCLUDE_EXTRA", "").split(",")
+    if nome.strip()
+]
+
+
+def deve_ignorar(nome: str) -> bool:
+    """A pasta entra na análise?
+
+    Compara por curinga: sem isso cada perfil de navegador precisaria ser
+    listado pelo nome exato, um por um.
+    """
+    from fnmatch import fnmatch
+
+    return any(fnmatch(nome, padrao) for padrao in EXCLUDE_DIRS)
 
 # Arquivos estáticos do dashboard, empacotados junto com o código
 WEB_DIR = Path(__file__).parent / "web"

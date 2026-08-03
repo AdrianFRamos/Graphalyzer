@@ -57,3 +57,34 @@ def test_cytoscape_nao_emite_aresta_orfa():
 
     tudo = to_cytoscape(graph, "all")
     assert len(tudo["nodes"]) == 2 and len(tudo["edges"]) == 1
+
+
+def test_pasta_do_no_relativa_ao_projeto():
+    """A cor do nó vem da pasta, então ela precisa sair relativa à raiz."""
+    from graphalyzer.domain.views import pasta_do_no
+
+    no = Node(
+        id="x",
+        name="x",
+        type=NodeType.FUNCTION,
+        file_path="/proj/backend/app/api/rotas.py",
+    )
+
+    assert pasta_do_no(no, "/proj") == "backend/app/api"
+    assert pasta_do_no(no, "/proj/backend/app/api") == ""
+
+
+def test_cytoscape_inclui_a_pasta():
+    """O payload leva a pasta: é o que o dashboard e o HTML usam para colorir."""
+    graph = ProjectGraph(project_name="t", project_path="/proj")
+    graph.add_node(
+        Node(
+            id="a",
+            name="a",
+            type=NodeType.FILE,
+            file_path="/proj/modulos/financeiro/a.py",
+        )
+    )
+
+    dados = to_cytoscape(graph, "all")
+    assert dados["nodes"][0]["data"]["folder"] == "modulos/financeiro"

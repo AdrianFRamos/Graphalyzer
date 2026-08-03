@@ -269,6 +269,12 @@ class ProjectParser:
 
         return self.files
 
+    def _ignorar(self, nome: str) -> bool:
+        """Compara com curinga, para cobrir nomes variáveis de perfil."""
+        from fnmatch import fnmatch
+
+        return any(fnmatch(nome, padrao) for padrao in self.exclude_dirs)
+
     def _find_source_files(self) -> List[str]:
         """Arquivos de código das linguagens suportadas."""
         from graphalyzer.analysis.languages import supported_extensions
@@ -277,7 +283,7 @@ class ProjectParser:
         encontrados = []
 
         for root, dirs, files in os.walk(self.project_path):
-            dirs[:] = [d for d in dirs if d not in self.exclude_dirs]
+            dirs[:] = [d for d in dirs if not self._ignorar(d)]
 
             for file in files:
                 if file.endswith(extensoes):

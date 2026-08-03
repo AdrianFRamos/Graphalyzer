@@ -132,3 +132,22 @@ def test_complexidade_nao_colide_entre_classes():
 
     assert por_classe["Simples"] == 1, por_classe
     assert por_classe["Complexa"] > 1, por_classe
+
+
+def test_ignora_pastas_por_curinga():
+    """Perfis de navegador vêm com nome variável e não são código do projeto.
+
+    Automações com Selenium deixam um profile inteiro no repositório; sem o
+    curinga, cada nome teria de ser listado à mão.
+    """
+    graph = build_graph(
+        {
+            "app.py": "def principal():\n    pass\n",
+            "chrome_profile_copel/Default/ext.py": "def lixo():\n    pass\n",
+            "tim_profile/WasmTtsEngine/x.py": "def lixo2():\n    pass\n",
+            "node_modules/pacote/mod.py": "def lixo3():\n    pass\n",
+        }
+    )
+
+    arquivos = {n.name for n in graph.nodes.values() if n.type.value == "file"}
+    assert arquivos == {"app"}, arquivos

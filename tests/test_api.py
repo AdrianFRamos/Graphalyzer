@@ -3,6 +3,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from pathlib import Path
+
 from conftest import SAMPLE_PROJECT
 
 from graphalyzer.api.app import create_app
@@ -83,3 +85,23 @@ def test_export_formato_invalido(client, analysis_id):
 def test_delete_remove_analise(client, analysis_id):
     assert client.delete(f"/api/analysis/{analysis_id}").status_code == 200
     assert client.get(f"/api/analysis/{analysis_id}").status_code == 404
+
+
+def test_resposta_traz_o_caminho_resolvido(client):
+    """A resposta devolve o caminho que foi de fato analisado.
+
+    O frontend guarda o id da análise, mas a store do servidor é em memória e
+    morre a cada reinício. Sem o caminho na resposta, não há como refazer a
+    análise depois de um restart — o usuário fica preso num 404.
+    """
+    resposta = client.post(
+        "/api/analyze", json={"project_path": str(SAMPLE_PROJECT)}
+    ).json()
+
+    assert resposta["project_path"], "resposta sem project_path"
+    assert Path(resposta["project_path"]).is_dir()
+
+
+def test_analise_desconhecida_responde_404(client):
+    """Id que não existe mais é 404 — o frontend usa isso para revalidar."""
+    assert client.get("/api/analysis/inexistente/graph").status_code == 404

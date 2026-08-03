@@ -50,7 +50,7 @@ graphalyzer/
 │   ├── storage/              # Persistência e exportação
 │   │   ├── exporters.py      #   JSON, Markdown, HTML, CSV
 │   │   ├── reports.py        #   Relatórios de arquitetura e qualidade
-│   │   └── cache.py          #   Cache SQLite
+│   │   └── cache.py          #   Cache SQLite com invalidação por mtime
 │   │
 │   ├── plugins/registry.py   # Analisadores e exportadores customizados
 │   │
@@ -87,8 +87,8 @@ graphalyzer/
 - `api` e `cli` são cascas finas: validam entrada, chamam `services`, formatam saída.
 - Camadas internas usam `logging` e **nunca** escrevem em stdout — só os entry points imprimem.
 
-> Ainda não ligados a nenhum fluxo: `storage/cache.py`, `plugins/registry.py`
-> e `ai/training.py`. Existem e funcionam isolados, mas nem CLI nem API os invocam.
+> Ainda não ligados a nenhum fluxo: `plugins/registry.py` e `ai/training.py`.
+> Existem e funcionam isolados, mas nem CLI nem API os invocam.
 
 ## 🌍 Linguagens suportadas
 
@@ -209,6 +209,36 @@ que já foi analisado.
 
 O Cytoscape é empacotado no bundle, não vem de CDN. Sem isso o modo offline
 não existiria.
+
+## ⚡ Cache
+
+Ligado por padrão. A segunda análise do mesmo projeto reaproveita o grafo
+guardado em SQLite, e o resultado sobrevive a reinício do container.
+
+```
+1a analise :   53.5s   (constroi o grafo)
+2a analise :    3.3s   (do cache)          → 16x
+apos restart:   2.6s   (do cache)
+```
+
+**Invalidação** por impressão digital do projeto: caminho, tamanho e data de
+modificação de cada arquivo de código. Não lê o conteúdo — se lesse, verificar
+custaria o mesmo que analisar e o cache não pagaria o próprio custo. Pastas de
+dependência (`node_modules`, `build`, `.dart_tool`...) ficam de fora, senão um
+`npm install` invalidaria tudo.
+
+Editar, adicionar ou remover qualquer arquivo invalida na hora.
+
+```bash
+graphalyzer /caminho --no-cache          # ignora e reanalisa
+curl -X POST http://127.0.0.1:5000/api/cache/clear
+curl http://127.0.0.1:5000/api/cache/stats
+```
+
+Na API: `{"project_path": "...", "use_cache": false}`. A resposta traz
+`from_cache`, então dá para saber se veio pronto.
+
+> Um grafo guardado sem análise de IA não é devolvido para quem pediu com IA.
 
 ## 🐳 Docker
 
@@ -349,7 +379,7 @@ export OPENAI_API_KEY="sk-..."
 - [x] Endpoints REST
 - [ ] WebSocket para atualizações em tempo real
 - [ ] Upload de projetos
-- [ ] Ligar o cache SQLite ao build (hoje só expõe estatísticas)
+- [x] Cache SQLite ligado, com invalidação por mtime
 
 ### Fase 6: Treinamento de Modelo Próprio 📋 (Planejado)
 - [ ] Gerador de dataset

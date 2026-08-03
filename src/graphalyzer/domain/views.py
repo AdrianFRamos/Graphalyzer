@@ -4,6 +4,7 @@ Compartilhado pelo dashboard (via API) e pelo HTML exportado — as duas
 telas mostram o mesmo grafo e não podem divergir na hora de montá-lo.
 """
 
+from pathlib import PurePath
 from typing import Any, Dict, List, Optional
 
 from graphalyzer.domain.models import NodeType, ProjectGraph
@@ -23,6 +24,24 @@ VIEW_TYPES = {
 }
 
 
+def pasta_do_no(node, project_path: str) -> str:
+    """Pasta do nó, relativa à raiz do projeto.
+
+    É o agrupamento natural de um repositório — `lib/servicos`, `api/routes` —
+    e serve para colorir o grafo por módulo em vez de por tipo de nó.
+    """
+    if not node.file_path:
+        return ""
+
+    try:
+        relativo = PurePath(node.file_path).relative_to(PurePath(project_path))
+    except ValueError:
+        relativo = PurePath(node.file_path)
+
+    pasta = relativo.parent.as_posix()
+    return "" if pasta in (".", "/") else pasta
+
+
 def to_cytoscape(graph: ProjectGraph, view_type: str = "all") -> Dict[str, List[Any]]:
     """Monta nós e arestas no formato do Cytoscape para a visualização pedida.
 
@@ -40,6 +59,7 @@ def to_cytoscape(graph: ProjectGraph, view_type: str = "all") -> Dict[str, List[
                 "color": NODE_COLORS.get(node.type, "#999"),
                 "complexity": node.complexity,
                 "file_path": node.file_path,
+                "folder": pasta_do_no(node, graph.project_path),
             }
         }
         for node in graph.nodes.values()

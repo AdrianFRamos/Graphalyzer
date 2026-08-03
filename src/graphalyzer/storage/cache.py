@@ -90,7 +90,7 @@ class AnalysisCache:
         partes = []
 
         for root, dirs, files in os.walk(project_path):
-            dirs[:] = [d for d in dirs if d not in config.EXCLUDE_DIRS]
+            dirs[:] = [d for d in dirs if not config.deve_ignorar(d)]
 
             for nome in sorted(files):
                 if not nome.endswith(extensoes):

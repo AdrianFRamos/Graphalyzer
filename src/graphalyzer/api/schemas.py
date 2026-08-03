@@ -23,6 +23,9 @@ class AnalysisResponse(BaseModel):
     analysis_id: str
     status: str
     project_name: str
+    # O caminho já resolvido (traduzido do host, quando em container). O
+    # frontend precisa dele para reanalisar quando o servidor reinicia.
+    project_path: str
     file_count: int
     function_count: int
     class_count: int

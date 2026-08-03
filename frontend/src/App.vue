@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import GraphCanvas from '@/components/GraphCanvas.vue'
 import NodeDetails from '@/components/NodeDetails.vue'
@@ -9,6 +9,25 @@ import { actions, store } from '@/store'
 const caminho = ref('')
 const usarIa = ref(false)
 const semRede = ref(!navigator.onLine)
+
+// Quantos nós não têm nenhuma conexão nesta visualização
+const orfaos = computed(() => {
+  const ligados = new Set()
+  for (const e of store.graph.edges) {
+    ligados.add(e.data.source)
+    ligados.add(e.data.target)
+  }
+  return store.graph.nodes.filter((n) => !ligados.has(n.data.id)).length
+})
+
+// Grafo majoritariamente solto: o usuário merece saber por que está vazio,
+// em vez de achar que a ferramenta falhou.
+const grafoEsparso = computed(
+  () =>
+    store.viewType === 'file' &&
+    store.graph.nodes.length > 10 &&
+    orfaos.value / store.graph.nodes.length > 0.6,
+)
 
 onMounted(() => {
   // Restaura a última análise: é o que torna o PWA útil sem o backend de pé
@@ -48,9 +67,19 @@ onMounted(() => {
       </header>
 
       <p v-if="store.restoredFromCache" class="banner info">
-        Mostrando a última análise salva neste dispositivo. Para analisar um
-        projeto novo, o servidor local precisa estar rodando
-        (<code>graphalyzer-api</code>).
+        Mostrando a última análise salva neste dispositivo.
+        <template v-if="semRede || store.offline">
+          Para analisar um projeto novo, o servidor local precisa estar rodando
+          (<code>graphalyzer-api</code>).
+        </template>
+      </p>
+
+      <p v-if="grafoEsparso" class="banner info">
+        Este projeto tem {{ orfaos }} de {{ store.graph.nodes.length }} arquivos
+        sem nenhum import entre si — são scripts independentes, então a vista
+        "Arquivos" fica quase vazia. Troque para
+        <strong>Funções e classes</strong> ou <strong>Tudo</strong> para ver as
+        conexões internas.
       </p>
 
       <p v-if="semRede || store.offline" class="banner warn">

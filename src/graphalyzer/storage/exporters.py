@@ -194,6 +194,9 @@ class HTMLExporter(Exporter):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Análise: {self.graph.project_name}</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>
+    <script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>
+    <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
     <style>
         * {{
             margin: 0;
@@ -203,7 +206,8 @@ class HTMLExporter(Exporter):
         
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f5f5f5;
+            background: #16161e;
+            color: #c0caf5;
         }}
         
         .container {{
@@ -213,7 +217,7 @@ class HTMLExporter(Exporter):
         
         .sidebar {{
             width: 300px;
-            background: white;
+            background: #1a1b26;
             border-right: 1px solid #ddd;
             overflow-y: auto;
             padding: 20px;
@@ -227,7 +231,7 @@ class HTMLExporter(Exporter):
         }}
         
         .header {{
-            background: white;
+            background: #1a1b26;
             padding: 20px;
             border-bottom: 1px solid #ddd;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -246,7 +250,7 @@ class HTMLExporter(Exporter):
         }}
         
         .stat {{
-            background: #f0f0f0;
+            background: #24283b;
             padding: 10px;
             border-radius: 4px;
             text-align: center;
@@ -255,38 +259,49 @@ class HTMLExporter(Exporter):
         .stat-value {{
             font-size: 20px;
             font-weight: bold;
-            color: #333;
+            color: #c0caf5;
         }}
         
         .stat-label {{
             font-size: 12px;
-            color: #666;
+            color: #8b93a7;
             margin-top: 5px;
         }}
         
+        #carregando {{
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-content: center;
+            background: #16161e;
+            color: #8b93a7;
+            font-size: 14px;
+            z-index: 999;
+        }}
         #cy {{
+            background: #1a1b26;
             flex: 1;
-            background: white;
+            background: #1a1b26;
         }}
         
         .sidebar h2 {{
             font-size: 16px;
             margin-bottom: 15px;
-            color: #333;
+            color: #c0caf5;
         }}
         
         .sidebar h3 {{
             font-size: 12px;
             margin-top: 15px;
             margin-bottom: 10px;
-            color: #666;
+            color: #8b93a7;
             text-transform: uppercase;
         }}
         
         .node-item {{
             padding: 8px;
             margin-bottom: 5px;
-            background: #f9f9f9;
+            background: #1f2335;
             border-left: 3px solid #007bff;
             cursor: pointer;
             border-radius: 2px;
@@ -294,19 +309,19 @@ class HTMLExporter(Exporter):
         }}
         
         .node-item:hover {{
-            background: #f0f0f0;
+            background: #24283b;
         }}
         
         .node-item.file {{
-            border-left-color: #28a745;
+            border-left-color: #4a7c59;
         }}
         
         .node-item.function {{
-            border-left-color: #007bff;
+            border-left-color: #3d5a80;
         }}
         
         .node-item.class {{
-            border-left-color: #ffc107;
+            border-left-color: #e0af68;
         }}
     </style>
 </head>
@@ -314,7 +329,7 @@ class HTMLExporter(Exporter):
     <div class="container">
         <div class="sidebar">
             <h2>{self.graph.project_name}</h2>
-            <p style="font-size: 12px; color: #666; margin-bottom: 15px;">{self.graph.project_path}</p>
+            <p style="font-size: 12px; color: #8b93a7; margin-bottom: 15px;">{self.graph.project_path}</p>
             
             <div class="stats">
                 <div class="stat">
@@ -348,98 +363,154 @@ class HTMLExporter(Exporter):
         <div class="main">
             <div class="header">
                 <h1>Grafo de Dependências</h1>
-                <p style="color: #666; font-size: 12px;">Clique nos nós para ver detalhes</p>
+                <p style="color: #8b93a7; font-size: 12px;">Passe o mouse para focar · dê zoom para ver os nomes</p>
             </div>
             <div id="cy"></div>
         </div>
     </div>
     
+    <div id="carregando">Montando o grafo…</div>
     <script>
+        // Extensões UMD costumam se auto-registrar, mas registrar de novo é
+        // inofensivo e garante o fcose mesmo se a ordem de carga variar.
+        if (typeof cytoscapeFcose !== 'undefined' && typeof cytoscape !== 'undefined') {{
+            try {{ cytoscape.use(cytoscapeFcose); }} catch (e) {{ /* já registrado */ }}
+        }}
+
+        const elementos = {json.dumps(nodes_data + edges_data)};
+
+        // Cor por pasta: mesma paleta e mesma ordenação do dashboard, para o
+        // arquivo exportado e a tela não divergirem.
+        const PALETA = ['#7aa2f7','#9ece6a','#e0af68','#bb9af7','#7dcfff','#f7768e',
+                        '#73daca','#ff9e64','#c0caf5','#b4f9f8','#d19a66','#a6e3a1',
+                        '#f5c2e7','#89dceb','#eba0ac','#94e2d5'];
+        const pastas = [...new Set(elementos.filter(e => !e.data.source)
+                        .map(e => e.data.folder || ''))].sort();
+        const corDaPasta = {{}};
+        pastas.forEach((p, i) => {{ corDaPasta[p] = PALETA[i % PALETA.length]; }});
+        for (const el of elementos) {{
+            if (!el.data.source) el.data.corDaPasta = corDaPasta[el.data.folder || ''];
+        }}
+
+        // Grau = nº de conexões. É o que dimensiona o nó, como no Obsidian.
+        const grau = {{}};
+        for (const el of elementos) {{
+            if (el.data.source) {{
+                grau[el.data.source] = (grau[el.data.source] || 0) + 1;
+                grau[el.data.target] = (grau[el.data.target] || 0) + 1;
+            }}
+        }}
+        for (const el of elementos) {{
+            if (!el.data.source) el.data.grau = grau[el.data.id] || 0;
+        }}
+
         const cy = cytoscape({{
             container: document.getElementById('cy'),
-            elements: {json.dumps(nodes_data + edges_data)},
+            elements: elementos,
+            wheelSensitivity: 0.2,
+            minZoom: 0.08,
+            maxZoom: 6,
             style: [
                 {{
                     selector: 'node',
                     style: {{
-                        'content': 'data(label)',
-                        'text-valign': 'center',
-                        'text-halign': 'center',
-                        'background-color': 'data(color)',
-                        'width': '60px',
-                        'height': '60px',
-                        'font-size': '10px',
-                        'color': '#fff',
-                        'text-wrap': 'wrap',
-                        'text-max-width': '55px',
+                        'background-color': 'data(corDaPasta)',
+                        'width': 'mapData(grau, 0, 20, 7, 38)',
+                        'height': 'mapData(grau, 0, 20, 7, 38)',
+                        'border-width': 0,
+                        'label': 'data(label)',
+                        'font-size': 7,
+                        'text-valign': 'bottom',
+                        'text-margin-y': 4,
+                        'color': '#c0caf5',
+                        'text-opacity': 0,
+                        'text-outline-width': 2,
+                        'text-outline-color': '#1a1b26',
+                        'min-zoomed-font-size': 6,
                     }}
+                }},
+                {{
+                    selector: 'node[type = "file"]',
+                    style: {{ 'border-width': 2, 'border-color': '#e8ecfb', 'border-opacity': 0.55 }}
                 }},
                 {{
                     selector: 'edge',
                     style: {{
-                        'target-arrow-shape': 'triangle',
-                        'line-color': '#ccc',
-                        'target-arrow-color': '#ccc',
-                        'width': '2px',
+                        'width': 0.6,
+                        'line-color': '#3b4261',
+                        'curve-style': 'straight',
+                        'target-arrow-shape': 'none',
+                        'opacity': 0.55,
                     }}
                 }},
+                {{ selector: 'edge[type = "data_flow"]', style: {{ 'line-color': '#4a7c59', 'width': 0.9 }} }},
+                {{ selector: 'edge[type = "calls"]', style: {{ 'line-color': '#3d5a80' }} }},
+                {{ selector: 'edge[type = "import"]', style: {{ 'line-color': '#4a4458', 'line-style': 'dashed' }} }},
+                {{ selector: 'node.com-rotulo', style: {{ 'text-opacity': 0.9 }} }},
+                {{ selector: '.apagado', style: {{ 'opacity': 0.08, 'text-opacity': 0 }} }},
+                {{ selector: 'node.vizinho', style: {{ 'text-opacity': 0.95, 'z-index': 10 }} }},
                 {{
-                    selector: 'edge[type = "uses"]',
-                    style: {{
-                        'line-color': '#e0e0e0',
-                        'target-arrow-color': '#e0e0e0',
-                        'width': '1px',
-                    }}
+                    selector: 'node.foco',
+                    style: {{ 'background-color': '#f7768e', 'text-opacity': 1, 'z-index': 20 }}
                 }},
-                {{
-                    selector: 'edge[type = "import"]',
-                    style: {{
-                        'line-color': '#6c757d',
-                        'target-arrow-color': '#6c757d',
-                        'line-style': 'dashed',
-                    }}
-                }},
-                {{
-                    selector: 'edge[type = "calls"]',
-                    style: {{
-                        'line-color': '#007bff',
-                        'target-arrow-color': '#007bff',
-                    }}
-                }},
-                {{
-                    selector: 'edge[type = "data_flow"]',
-                    style: {{
-                        'line-color': '#28a745',
-                        'target-arrow-color': '#28a745',
-                        'width': '3px',
-                        'label': 'data(label)',
-                        'font-size': '9px',
-                        'color': '#28a745',
-                        'text-background-color': '#fff',
-                        'text-background-opacity': 0.85,
-                    }}
-                }},
-                {{
-                    selector: 'node:selected',
-                    style: {{
-                        'background-color': '#ff6b6b',
-                        'width': '80px',
-                        'height': '80px',
-                    }}
-                }}
+                {{ selector: 'edge.vizinho', style: {{ 'opacity': 1, 'width': 1.4, 'line-color': '#f7768e' }} }}
             ],
             layout: {{
-                name: 'cose',
-                directed: true,
-                animate: true,
-                animationDuration: 500,
+                // fcose, não cose: `cose` é O(n²) e trava o navegador em
+                // projetos reais — 4 mil nós nunca terminavam de carregar.
+                name: typeof cytoscapeFcose !== 'undefined' ? 'fcose' : 'cose',
+                quality: elementos.length > 5000 ? 'draft' : 'default',
+                numIter: elementos.length > 5000 ? 1000 : 2500,
+                animate: false,
+                randomize: true,
+                nodeRepulsion: 6000,
+                idealEdgeLength: 60,
+                fit: true,
+                padding: 50,
             }}
         }});
-        
-        // Event listeners
-        cy.on('tap', 'node', function(evt) {{
-            const node = evt.target;
-            console.log('Nó selecionado:', node.data());
+
+        // Órfãos num anel externo, em vez de vagarem pelo centro
+        (function anelDeOrfaos() {{
+            const orfaos = cy.nodes().filter(n => n.degree(false) === 0);
+            if (!orfaos.length) return;
+            const conectados = cy.nodes().difference(orfaos);
+            const caixa = conectados.length
+                ? conectados.boundingBox()
+                : {{ x1: 0, y1: 0, w: 400, h: 400 }};
+            const cx = caixa.x1 + caixa.w / 2;
+            const cyy = caixa.y1 + caixa.h / 2;
+            const raio = Math.max(caixa.w, caixa.h) / 2 + 90;
+            orfaos.forEach((n, i) => {{
+                const a = (2 * Math.PI * i) / orfaos.length;
+                n.position({{ x: cx + raio * Math.cos(a), y: cyy + raio * Math.sin(a) }});
+            }});
+            cy.fit(undefined, 60);
+        }})();
+
+        // O layout roda síncrono na inicialização (animate: false), então o
+        // evento `layoutstop` já passou aqui — remover direto é o que funciona.
+        document.getElementById('carregando')?.remove();
+
+        // Rótulos só com zoom
+        function atualizarRotulos() {{
+            const mostrar = cy.zoom() >= 1.4;
+            cy.batch(() => cy.nodes().toggleClass('com-rotulo', mostrar));
+        }}
+        cy.on('zoom', atualizarRotulos);
+        atualizarRotulos();
+
+        // Foco na vizinhança
+        cy.on('mouseover', 'node', function(e) {{
+            const viz = e.target.closedNeighborhood();
+            cy.batch(() => {{
+                cy.elements().addClass('apagado');
+                viz.removeClass('apagado').addClass('vizinho');
+                e.target.removeClass('vizinho').addClass('foco');
+            }});
+        }});
+        cy.on('mouseout', 'node', function() {{
+            cy.batch(() => cy.elements().removeClass('apagado vizinho foco'));
         }});
     </script>
 </body>
@@ -463,7 +534,7 @@ class HTMLExporter(Exporter):
                     f'<div class="node-item {node_type}" onclick="selectNode(\'{node.id}\')">{node.name}</div>'
                 )
 
-        return "\n".join(items) if items else "<p style='font-size: 12px; color: #999;'>Nenhum item</p>"
+        return "\n".join(items) if items else "<p style='font-size: 12px; color: #6b7394;'>Nenhum item</p>"
 
 
 class CSVExporter(Exporter):

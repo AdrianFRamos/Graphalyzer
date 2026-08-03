@@ -96,6 +96,7 @@ async def analyze_project(request: AnalysisRequest) -> AnalysisResponse:
         analysis_id=analysis.id,
         status="completed",
         project_name=graph.project_name,
+        project_path=analysis.project_path,
         file_count=graph.file_count,
         function_count=graph.function_count,
         class_count=graph.class_count,
