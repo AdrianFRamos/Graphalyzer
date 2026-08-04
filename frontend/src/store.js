@@ -7,7 +7,8 @@ const STORAGE_KEY = 'graphalyzer:ultima-analise'
 // Subir este número descarta snapshots gravados por versões antigas. Sem isso,
 // um campo novo (como a pasta do nó) fica faltando no que veio do disco e a
 // tela mostra dados incompletos sem nenhum sinal de erro.
-const VERSAO_DO_SNAPSHOT = 2
+// v3: o detalhe do nó ganhou as relações por tipo (contido_em, importa...)
+const VERSAO_DO_SNAPSHOT = 3
 
 // Preferência de tema fica fora do snapshot da análise: sobrevive à troca de
 // projeto e a qualquer mudança de formato dos dados.

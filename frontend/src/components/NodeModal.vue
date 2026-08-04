@@ -37,6 +37,37 @@ const saidasDeFluxo = computed(() => {
   })
 })
 
+// Contagem por tipo em vez de um total solto: um nó com 3 arestas de import
+// mostrava "Entradas 3" e a seção vazia logo abaixo.
+const RELACAO = { fluxo: 'fluxo', chamadas: 'chamadas', imports: 'imports', contencao: 'contenção' }
+
+function detalhar(resumo) {
+  // Detalhe vindo de um cache antigo não tem o resumo: melhor omitir a
+  // métrica do que mostrar um rótulo sem valor ao lado.
+  if (!resumo) return ''
+  const partes = Object.entries(resumo)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${n} ${RELACAO[k] || k}`)
+  return partes.join(' · ') || 'nenhuma'
+}
+
+const entram = computed(() => detalhar(no.value?.resumo_das_relacoes?.entram))
+const saem = computed(() => detalhar(no.value?.resumo_das_relacoes?.saem))
+
+// Grupos que só aparecem quando têm conteúdo
+const grupos = computed(() => {
+  const n = no.value
+  if (!n) return []
+  return [
+    ['Contido em', n.contido_em],
+    ['Contém', n.contem],
+    ['Chamada por', n.chamado_por],
+    ['Chama', n.chama],
+    ['Importado por', n.importado_por],
+    ['Importa', n.importa],
+  ].filter(([, itens]) => itens?.length)
+})
+
 function aoTeclar(evento) {
   if (evento.key === 'Escape' && no.value) actions.clearSelection()
 }
@@ -117,7 +148,10 @@ watch(
               </template>
 
               <p v-if="!no.parameters?.length && !entradasDeFluxo.length" class="vazio">
-                Sem entradas.
+                Nenhum parâmetro nem fluxo de dados de entrada.
+                <template v-if="entram && entram !== 'nenhuma'">
+                  As relações que chegam ({{ entram }}) estão abaixo.
+                </template>
               </p>
             </section>
 
@@ -145,45 +179,38 @@ watch(
               </template>
 
               <p v-if="!no.return_type && !saidasDeFluxo.length" class="vazio">
-                Sem saídas declaradas.
+                Nenhum retorno nem fluxo de dados de saída.
+                <template v-if="saem && saem !== 'nenhuma'">
+                  As relações que saem ({{ saem }}) estão abaixo.
+                </template>
               </p>
             </section>
           </div>
 
-          <div v-if="no.chamado_por?.length || no.chama?.length" class="colunas">
-            <section v-if="no.chamado_por?.length">
-              <h3>Chamada por</h3>
-              <div class="fichas">
-                <button
-                  v-for="c in no.chamado_por"
-                  :key="c.id"
-                  class="ficha"
-                  @click="actions.selectNode(c.id)"
-                >
-                  {{ c.nome }}
-                </button>
+          <section v-if="grupos.length" class="relacoes">
+            <h3>🔗 Relações</h3>
+            <div class="grupos">
+              <div v-for="[titulo, itens] in grupos" :key="titulo">
+                <p class="rotulo">{{ titulo }} ({{ itens.length }})</p>
+                <div class="fichas">
+                  <button
+                    v-for="item in itens"
+                    :key="item.id"
+                    class="ficha"
+                    :title="item.rotulo || item.tipo"
+                    @click="actions.selectNode(item.id)"
+                  >
+                    {{ item.nome }}
+                  </button>
+                </div>
               </div>
-            </section>
-
-            <section v-if="no.chama?.length">
-              <h3>Chama</h3>
-              <div class="fichas">
-                <button
-                  v-for="c in no.chama"
-                  :key="c.id"
-                  class="ficha"
-                  @click="actions.selectNode(c.id)"
-                >
-                  {{ c.nome }}
-                </button>
-              </div>
-            </section>
-          </div>
+            </div>
+          </section>
 
           <section class="metricas">
             <span>Complexidade <strong>{{ no.complexity }}</strong></span>
-            <span>Entradas <strong>{{ no.incoming_edges }}</strong></span>
-            <span>Saídas <strong>{{ no.outgoing_edges }}</strong></span>
+            <span v-if="entram">Entram <strong>{{ entram }}</strong></span>
+            <span v-if="saem">Saem <strong>{{ saem }}</strong></span>
             <span v-if="no.ai_category">Categoria <strong>{{ no.ai_category }}</strong></span>
           </section>
 
@@ -373,6 +400,12 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
+}
+
+.relacoes .grupos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.7rem;
 }
 
 .vazio {

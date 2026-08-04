@@ -135,3 +135,51 @@ def test_detalhe_de_no_inexistente_e_nulo():
 
     graph = ProjectGraph(project_name="t", project_path="/t")
     assert node_detail(graph, "nao-existe") is None
+
+
+def test_toda_aresta_tem_onde_aparecer(sample_graph):
+    """Nada pode ser contado sem ter um lugar na tela.
+
+    O painel mostrava "Entradas 3" e "Sem entradas" logo abaixo: o contador
+    somava todos os tipos de aresta, mas só `calls` e `data_flow` eram
+    desenhados. Imports e contenção sumiam.
+    """
+    from graphalyzer.domain.views import node_detail
+
+    LISTAS = (
+        "entradas",
+        "saidas",
+        "chamado_por",
+        "chama",
+        "importado_por",
+        "importa",
+        "contido_em",
+        "contem",
+    )
+
+    for node in sample_graph.nodes.values():
+        detalhe = node_detail(sample_graph, node.id)
+        listadas = sum(len(detalhe[chave]) for chave in LISTAS)
+        contadas = detalhe["incoming_edges"] + detalhe["outgoing_edges"]
+
+        assert listadas == contadas, (
+            f"{node.name}: {contadas} arestas contadas, {listadas} exibíveis"
+        )
+
+
+def test_resumo_das_relacoes_bate_com_as_listas(sample_graph):
+    """O resumo por tipo é o que a tela mostra — não pode divergir."""
+    from graphalyzer.domain.views import node_detail
+
+    arquivo = next(
+        n for n in sample_graph.nodes.values() if n.name == "calculator"
+    )
+    detalhe = node_detail(sample_graph, arquivo.id)
+    resumo = detalhe["resumo_das_relacoes"]
+
+    assert resumo["entram"]["imports"] == len(detalhe["importado_por"])
+    assert resumo["saem"]["contencao"] == len(detalhe["contem"])
+
+    # O arquivo contém suas funções e classes, e é importado pelo teste
+    assert detalhe["contem"], "arquivo sem membros listados"
+    assert "test_calculator" in {n["nome"] for n in detalhe["importado_por"]}

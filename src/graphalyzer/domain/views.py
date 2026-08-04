@@ -102,19 +102,39 @@ def assinatura(node) -> str:
 
 
 def _relacoes(graph: ProjectGraph, node_id: str) -> Dict[str, Any]:
-    """Entradas e saídas reais do nó, a partir das arestas do grafo.
+    """Todas as relações do nó, separadas por tipo de aresta.
 
     Os parâmetros dizem o que a rotina aceita; estas listas dizem o que de
     fato chega e sai — qual variável, vinda de quem, indo para onde.
+
+    Cada tipo de aresta tem seu balde, e todos são exibidos. Antes só `calls`
+    e `data_flow` chegavam à tela: um nó com três arestas de import ou de
+    contenção mostrava "3 entradas" e a seção vazia logo abaixo.
     """
-    entradas, saidas, chamado_por, chama = [], [], [], []
+    baldes: Dict[str, list] = {
+        "entradas": [],  # data flow que chega
+        "saidas": [],  # data flow que sai
+        "chamado_por": [],
+        "chama": [],
+        "importado_por": [],
+        "importa": [],
+        "contido_em": [],  # arquivo ou classe que contém este nó
+        "contem": [],  # membros deste nó
+    }
+
+    def referencia(node, edge=None):
+        item = {"nome": node.name, "id": node.id, "tipo": node.type.value}
+        if edge is not None and edge.label:
+            item["rotulo"] = edge.label
+        return item
 
     for edge in graph.get_edges_to(node_id):
         origem = graph.get_node(edge.source_id)
         if origem is None:
             continue
+
         if edge.type == EdgeType.DATA_FLOW:
-            entradas.append(
+            baldes["entradas"].append(
                 {
                     "variavel": edge.label,
                     "tipo": edge.data_type,
@@ -123,14 +143,19 @@ def _relacoes(graph: ProjectGraph, node_id: str) -> Dict[str, Any]:
                 }
             )
         elif edge.type == EdgeType.CALLS:
-            chamado_por.append({"nome": origem.name, "id": origem.id})
+            baldes["chamado_por"].append(referencia(origem))
+        elif edge.type == EdgeType.IMPORT:
+            baldes["importado_por"].append(referencia(origem, edge))
+        elif edge.type == EdgeType.USES:
+            baldes["contido_em"].append(referencia(origem))
 
     for edge in graph.get_edges_from(node_id):
         destino = graph.get_node(edge.target_id)
         if destino is None:
             continue
+
         if edge.type == EdgeType.DATA_FLOW:
-            saidas.append(
+            baldes["saidas"].append(
                 {
                     "variavel": edge.label,
                     "tipo": edge.data_type,
@@ -139,14 +164,29 @@ def _relacoes(graph: ProjectGraph, node_id: str) -> Dict[str, Any]:
                 }
             )
         elif edge.type == EdgeType.CALLS:
-            chama.append({"nome": destino.name, "id": destino.id})
+            baldes["chama"].append(referencia(destino))
+        elif edge.type == EdgeType.IMPORT:
+            baldes["importa"].append(referencia(destino, edge))
+        elif edge.type == EdgeType.USES:
+            baldes["contem"].append(referencia(destino))
 
-    return {
-        "entradas": entradas,
-        "saidas": saidas,
-        "chamado_por": chamado_por,
-        "chama": chama,
+    # Contagem por tipo: é o que a tela mostra em vez de um total sem detalhe
+    baldes["resumo_das_relacoes"] = {
+        "entram": {
+            "fluxo": len(baldes["entradas"]),
+            "chamadas": len(baldes["chamado_por"]),
+            "imports": len(baldes["importado_por"]),
+            "contencao": len(baldes["contido_em"]),
+        },
+        "saem": {
+            "fluxo": len(baldes["saidas"]),
+            "chamadas": len(baldes["chama"]),
+            "imports": len(baldes["importa"]),
+            "contencao": len(baldes["contem"]),
+        },
     }
+
+    return baldes
 
 
 def node_detail(graph: ProjectGraph, node_id: str) -> Optional[Dict[str, Any]]:
