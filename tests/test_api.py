@@ -69,7 +69,7 @@ def test_detalhe_de_no_e_metricas(client, analysis_id):
     assert client.get(f"/api/analysis/{analysis_id}/metrics").status_code == 200
 
 
-@pytest.mark.parametrize("export_format", ["json", "md", "html", "csv"])
+@pytest.mark.parametrize("export_format", ["json", "md", "html", "csv", "docs", "pdf"])
 def test_export(client, analysis_id, export_format):
     """Todo formato exporta e devolve conteúdo."""
     response = client.get(f"/api/analysis/{analysis_id}/export/{export_format}")
@@ -78,7 +78,8 @@ def test_export(client, analysis_id, export_format):
 
 
 def test_export_formato_invalido(client, analysis_id):
-    response = client.get(f"/api/analysis/{analysis_id}/export/pdf")
+    # `pdf` deixou de servir de exemplo aqui: virou formato suportado
+    response = client.get(f"/api/analysis/{analysis_id}/export/docx")
     assert response.status_code == 400
 
 

@@ -7,7 +7,7 @@ telas mostram o mesmo grafo e não podem divergir na hora de montá-lo.
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional
 
-from graphalyzer.domain.models import NodeType, ProjectGraph
+from graphalyzer.domain.models import EdgeType, NodeType, ProjectGraph
 
 NODE_COLORS = {
     NodeType.FILE: "#28a745",
@@ -85,6 +85,70 @@ def to_cytoscape(graph: ProjectGraph, view_type: str = "all") -> Dict[str, List[
     return {"nodes": nodes, "edges": edges}
 
 
+def assinatura(node) -> str:
+    """Assinatura legível da rotina: `nome(param: tipo) -> retorno`."""
+    partes = []
+    for p in node.parameters:
+        texto = f"{p.name}: {p.type_hint}" if p.type_hint else p.name
+        if p.default_value:
+            texto += f" = {p.default_value}"
+        partes.append(texto)
+
+    retorno = ""
+    if node.return_value and node.return_value.type_hint:
+        retorno = f" -> {node.return_value.type_hint}"
+
+    return f"{node.name}({', '.join(partes)}){retorno}"
+
+
+def _relacoes(graph: ProjectGraph, node_id: str) -> Dict[str, Any]:
+    """Entradas e saídas reais do nó, a partir das arestas do grafo.
+
+    Os parâmetros dizem o que a rotina aceita; estas listas dizem o que de
+    fato chega e sai — qual variável, vinda de quem, indo para onde.
+    """
+    entradas, saidas, chamado_por, chama = [], [], [], []
+
+    for edge in graph.get_edges_to(node_id):
+        origem = graph.get_node(edge.source_id)
+        if origem is None:
+            continue
+        if edge.type == EdgeType.DATA_FLOW:
+            entradas.append(
+                {
+                    "variavel": edge.label,
+                    "tipo": edge.data_type,
+                    "origem": origem.name,
+                    "origem_id": origem.id,
+                }
+            )
+        elif edge.type == EdgeType.CALLS:
+            chamado_por.append({"nome": origem.name, "id": origem.id})
+
+    for edge in graph.get_edges_from(node_id):
+        destino = graph.get_node(edge.target_id)
+        if destino is None:
+            continue
+        if edge.type == EdgeType.DATA_FLOW:
+            saidas.append(
+                {
+                    "variavel": edge.label,
+                    "tipo": edge.data_type,
+                    "destino": destino.name,
+                    "destino_id": destino.id,
+                }
+            )
+        elif edge.type == EdgeType.CALLS:
+            chama.append({"nome": destino.name, "id": destino.id})
+
+    return {
+        "entradas": entradas,
+        "saidas": saidas,
+        "chamado_por": chamado_por,
+        "chama": chama,
+    }
+
+
 def node_detail(graph: ProjectGraph, node_id: str) -> Optional[Dict[str, Any]]:
     """Detalhes completos de um nó, incluindo assinatura e grau de conexão."""
     node = graph.get_node(node_id)
@@ -92,6 +156,9 @@ def node_detail(graph: ProjectGraph, node_id: str) -> Optional[Dict[str, Any]]:
         return None
 
     return {
+        **_relacoes(graph, node_id),
+        "signature": assinatura(node),
+        "folder": pasta_do_no(node, graph.project_path),
         "id": node.id,
         "name": node.name,
         "type": node.type.value,

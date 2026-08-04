@@ -164,7 +164,7 @@ graphalyzer /caminho/do/projeto -o meu_output -f markdown
 graphalyzer /caminho/do/projeto -ai --ai-provider claude
 ```
 
-Formatos: `json`, `markdown`, `html`, `csv` ou `all` (padrão).
+Formatos: `json`, `markdown`, `html`, `csv`, `docs`, `pdf` ou `all` (padrão).
 
 ### Dashboard e API
 
@@ -239,6 +239,75 @@ Na API: `{"project_path": "...", "use_cache": false}`. A resposta traz
 `from_cache`, então dá para saber se veio pronto.
 
 > Um grafo guardado sem análise de IA não é devolvido para quem pediu com IA.
+
+## 🤖 Análise por IA
+
+Opcional. Com uma chave configurada, a IA resume **cada arquivo** e avalia a
+**organização do projeto** — e o resultado entra na documentação exportada.
+
+### Configurando a chave
+
+No dashboard, painel **Análise por IA** na barra lateral. Ou por variável de
+ambiente, que é a forma de persistir:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...    # ou OPENAI_API_KEY
+```
+
+**A chave enviada pelo dashboard fica só na memória do processo.** Não vai para
+disco, log, cache nem resposta de API — nem mascarada — e some ao reiniciar o
+servidor. Isso é deliberado: gravá-la transformaria um segredo de sessão em
+segredo persistido, com backup e tudo. O navegador também não a guarda.
+
+### O que a IA acrescenta
+
+| Onde | O quê |
+| --- | --- |
+| Responsabilidade de cada arquivo | Uma frase sobre o papel dele, quando não há docstring |
+| Notas de implementação | Observação sobre acoplamento, risco ou padrão notável |
+| Visão geral do projeto | Organização, pontos de atenção e sugestões — no índice e na capa do PDF |
+
+O que é enviado ao modelo é a **estrutura extraída** (assinaturas, imports,
+relações), não o código-fonte inteiro: mais barato e menos exposto.
+
+### Custo
+
+Uma chamada por **arquivo**, não por função — a diferença entre ~100 e vários
+milhares num projeto real. As respostas são endereçadas pelo conteúdo do
+pedido: arquivo que não mudou não é reanalisado, mesmo que o resto do projeto
+tenha mudado. As chamadas rodam em paralelo (6 por vez).
+
+Sem chave, a análise segue normalmente — só perde o enriquecimento. Nada é
+inventado no lugar.
+
+## 📘 Documentação gerada
+
+O produto final da extração: um documento por arquivo de código, com a mesma
+estrutura em qualquer formato.
+
+```bash
+graphalyzer /caminho/do/projeto -f pdf      # documento único, com capa e sumário
+graphalyzer /caminho/do/projeto -f docs     # um Markdown por arquivo + índice
+```
+
+Cada documento traz:
+
+| Seção | De onde sai |
+| --- | --- |
+| **Responsabilidade** | Docstring do módulo, resumo da IA ou a estrutura extraída |
+| **Inputs** | Imports e os parâmetros das rotinas públicas, com tipo |
+| **Processamento** | Classes e funções numeradas, com complexidade ciclomática |
+| **Outputs** | Tipos de retorno e as variáveis que alimentam outros arquivos |
+| **Relacionamentos** | Arquivos ligados por import, chamada ou fluxo de dados |
+| **Notas** | Complexidade, cobertura de docstring, rotinas internas |
+
+O modelo do documento é montado uma vez e renderizado depois, então Markdown e
+PDF **nunca divergem no conteúdo** — só na apresentação. O Markdown usa links
+padrão (`[nome](nome.md)`), que funcionam em qualquer visualizador, inclusive
+no Obsidian, sem depender dele.
+
+> Nada é inventado. Sem docstring, a responsabilidade descreve o que foi
+> extraído ("Define 2 classes") em vez de supor a intenção do código.
 
 ## 🐳 Docker
 
@@ -371,6 +440,7 @@ export OPENAI_API_KEY="sk-..."
 - [x] Dashboard web local
 - [x] Grafo interativo (Cytoscape.js)
 - [x] Alternância arquivo ↔ função
+- [x] Pop-up do nó com assinatura, entradas e saídas, e navegação entre nós
 - [x] Arestas de fluxo de dados com nome e tipo da variável
 - [ ] Filtros e busca
 

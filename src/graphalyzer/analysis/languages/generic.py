@@ -338,7 +338,15 @@ class GenericAnalyzer:
         if not anteriores:
             return None
 
-        tipo = " ".join(_texto(f) for f in anteriores if f.type not in ("modifiers",))
+        # Junta sem espaço antes de argumentos genéricos: no Dart, `Future` e
+        # `<Map<String, dynamic>>` são nós irmãos e sairiam como "Future <Map…>".
+        partes = [_texto(f) for f in anteriores if f.type not in ("modifiers",)]
+        tipo = ""
+        for parte in partes:
+            if tipo and not parte.startswith(("<", "[", "?")):
+                tipo += " "
+            tipo += parte
+
         return tipo.strip() or None
 
     def _bases(self, node) -> List[str]:

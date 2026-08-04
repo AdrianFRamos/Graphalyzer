@@ -1,4 +1,8 @@
-:root {
+/* Tema claro é o padrão; o escuro entra por preferência do sistema (tema
+   "auto") ou por escolha explícita, via data-theme no <html>. A escolha
+   explícita precisa vencer a do sistema, por isso vem depois. */
+:root,
+:root[data-theme='claro'] {
   --bg: #f8fafc;
   --surface: #ffffff;
   --surface-alt: #f1f5f9;
@@ -7,11 +11,16 @@
   --text-muted: #64748b;
   --accent: #3b82f6;
 
-  color-scheme: light dark;
+  /* Grafo */
+  --grafo-fundo: #f4f6fb;
+  --grafo-link: #c2c9da;
+  --grafo-texto: #1e293b;
+  --grafo-no: #64748b;
+  --grafo-contorno: #1e293b;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='claro']) {
     --bg: #0f172a;
     --surface: #1e293b;
     --surface-alt: #334155;
@@ -19,7 +28,29 @@
     --text: #e2e8f0;
     --text-muted: #94a3b8;
     --accent: #60a5fa;
+
+    --grafo-fundo: #191a23;
+    --grafo-link: #454b66;
+    --grafo-texto: #d5dbf0;
+    --grafo-no: #c3c9dd;
+    --grafo-contorno: #e8ecfb;
   }
+}
+
+:root[data-theme='escuro'] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-alt: #334155;
+  --border: #334155;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --accent: #60a5fa;
+
+  --grafo-fundo: #191a23;
+  --grafo-link: #454b66;
+  --grafo-texto: #d5dbf0;
+  --grafo-no: #c3c9dd;
+  --grafo-contorno: #e8ecfb;
 }
 
 * {
@@ -30,8 +61,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Sem transição no tema o corte entre claro e escuro pisca */
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 button,

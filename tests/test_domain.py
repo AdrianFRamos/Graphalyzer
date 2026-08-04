@@ -88,3 +88,50 @@ def test_cytoscape_inclui_a_pasta():
 
     dados = to_cytoscape(graph, "all")
     assert dados["nodes"][0]["data"]["folder"] == "modulos/financeiro"
+
+
+def test_detalhe_traz_entradas_e_saidas_reais():
+    """O pop-up mostra o que de fato chega e sai, não só a assinatura.
+
+    Parâmetro diz o que a rotina aceita; a aresta de fluxo diz qual variável
+    chega, vinda de quem — é essa a informação que o grafo tem e o painel
+    antigo jogava fora.
+    """
+    from conftest import build_graph
+    from graphalyzer.domain.views import node_detail
+
+    graph = build_graph(
+        {
+            "f.py": (
+                "def somar(a: float, b: float) -> float:\n"
+                "    return a + b\n\n"
+                "def main(x: float, y: float) -> float:\n"
+                "    return somar(x, y)\n"
+            )
+        }
+    )
+
+    alvo = next(n for n in graph.nodes.values() if n.name == "somar")
+    detalhe = node_detail(graph, alvo.id)
+
+    assert detalhe["signature"] == "somar(a: float, b: float) -> float"
+
+    variaveis = {e["variavel"] for e in detalhe["entradas"]}
+    assert variaveis == {"x", "y"}, detalhe["entradas"]
+    assert all(e["origem"] == "main" for e in detalhe["entradas"])
+    assert all(e["tipo"] == "float" for e in detalhe["entradas"])
+
+    assert "main" in {c["nome"] for c in detalhe["chamado_por"]}
+
+    origem = node_detail(graph, next(
+        n.id for n in graph.nodes.values() if n.name == "main"
+    ))
+    assert {s["destino"] for s in origem["saidas"]} == {"somar"}
+    assert "somar" in {c["nome"] for c in origem["chama"]}
+
+
+def test_detalhe_de_no_inexistente_e_nulo():
+    from graphalyzer.domain.views import node_detail
+
+    graph = ProjectGraph(project_name="t", project_path="/t")
+    assert node_detail(graph, "nao-existe") is None

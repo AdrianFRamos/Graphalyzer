@@ -32,7 +32,19 @@ EXPORT_FORMATS = {
     "md": ("markdown", "text/markdown"),
     "html": ("html", "text/html"),
     "csv": ("csv", "text/csv"),
+    "docs": ("docs", "application/zip"),
+    "pdf": ("pdf", "application/pdf"),
 }
+
+
+def _limpar(*diretorios) -> None:
+    """Remove os temporários depois que o download termina.
+
+    O .zip é montado fora do diretório exportado, então há dois caminhos a
+    limpar — deixar qualquer um deles acumula lixo a cada download.
+    """
+    for diretorio in diretorios:
+        shutil.rmtree(diretorio, ignore_errors=True)
 
 
 def _ajuda_de_caminho(erro: Exception) -> str:
@@ -198,22 +210,28 @@ async def export_analysis(analysis_id: str, export_format: str):
         logger.exception("Falha ao exportar %s", export_format)
         raise HTTPException(status_code=500, detail=str(exc))
 
-    # Exportadores de múltiplos arquivos (CSV) descem como um único .zip
-    produced = sorted(Path(tmpdir).glob("*.*"))
-    if len(produced) > 1:
-        archive = Path(shutil.make_archive(str(Path(tmpdir) / "export"), "zip", tmpdir))
+    # Um arquivo só desce direto; vários (CSV) ou um diretório inteiro
+    # (documentação por arquivo) descem como .zip
+    produzidos = sorted(Path(tmpdir).iterdir())
+    unico = produzidos[0] if len(produzidos) == 1 else None
+
+    if unico is not None and unico.is_file():
         return FileResponse(
-            archive,
-            media_type="application/zip",
-            filename=f"analysis_{export_format}.zip",
+            unico,
+            media_type=media_type,
+            filename=f"analysis.{export_format}",
             background=cleanup,
         )
 
+    origem = str(unico) if unico is not None and unico.is_dir() else tmpdir
+    archive = Path(
+        shutil.make_archive(str(Path(tempfile.mkdtemp()) / "export"), "zip", origem)
+    )
     return FileResponse(
-        produced[0] if produced else written[0],
-        media_type=media_type,
-        filename=f"analysis.{export_format}",
-        background=cleanup,
+        archive,
+        media_type="application/zip",
+        filename=f"analysis_{export_format}.zip",
+        background=BackgroundTask(_limpar, tmpdir, archive.parent),
     )
 
 

@@ -57,6 +57,23 @@ export const api = {
     return `${API_BASE}/analysis/${analysisId}/export/${format}`
   },
 
+  statusDaIA() {
+    return request('/ai/status')
+  },
+
+  // A chave sobe uma vez e fica na memória do servidor; nunca volta.
+  definirChave(chave, provedor = 'claude') {
+    return request('/ai/key', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provedor, chave }),
+    })
+  },
+
+  esquecerChave(provedor = 'claude') {
+    return request(`/ai/key?provedor=${provedor}`, { method: 'DELETE' })
+  },
+
   async online() {
     try {
       const response = await fetch('/health')

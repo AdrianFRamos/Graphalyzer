@@ -16,6 +16,7 @@ from graphalyzer import config
 from graphalyzer.ai.analyzer import AIAnalyzer, LLMAnalyzer, MockAIAnalyzer
 from graphalyzer.analysis.builder import GraphBuilder
 from graphalyzer.domain.models import NodeType, ProjectGraph
+from graphalyzer.storage.docs_render import MarkdownDocsExporter, PdfDocsExporter
 from graphalyzer.storage.exporters import (
     CSVExporter,
     HTMLExporter,
@@ -30,6 +31,9 @@ EXPORTERS = {
     "markdown": (MarkdownExporter, "md"),
     "html": (HTMLExporter, "html"),
     "csv": (CSVExporter, "csv"),
+    # Documentação técnica por arquivo, o produto final da extração
+    "docs": (MarkdownDocsExporter, "docs"),
+    "pdf": (PdfDocsExporter, "pdf"),
 }
 
 
@@ -60,19 +64,34 @@ def build_ai_analyzer(provider: str, model: str) -> AIAnalyzer:
         return MockAIAnalyzer()
 
 
-def enrich_with_ai(graph: ProjectGraph, analyzer: AIAnalyzer) -> int:
-    """Preenche resumo e categoria dos nós de função. Devolve quantos foram."""
-    nodes = [n for n in graph.nodes.values() if n.type == NodeType.FUNCTION]
+def enrich_with_ai(graph: ProjectGraph, provider: str, model: str, cache=None) -> int:
+    """Enriquece o grafo com análise semântica voltada à documentação.
 
-    for node in nodes:
-        result = analyzer.analyze_function(
-            node.name, node.source_code or "", node.docstring
-        )
-        node.ai_summary = result.summary
-        node.ai_category = result.category
+    Alvo são os **arquivos** e a organização do projeto, não cada função: é o
+    que a documentação consome, e custa uma chamada por arquivo em vez de uma
+    por rotina — a diferença entre ~100 e vários milhares num projeto real.
+    """
+    from graphalyzer.ai.documentation import DocumentationAI
+
+    ia = DocumentationAI(provider=provider, model=model)
+    if not ia.disponivel:
+        logger.warning("IA indisponível: sem chave ou SDK. Análise segue sem ela.")
+        return 0
+
+    analisados = ia.resumir_arquivos(graph, cache=cache)
+
+    analise = ia.analisar_organizacao(graph)
+    if analise.visao_geral or analise.organizacao:
+        # Vai no grafo para sobreviver ao cache e chegar à documentação
+        graph.metadata["analise_do_projeto"] = {
+            "visao_geral": analise.visao_geral,
+            "organizacao": analise.organizacao,
+            "pontos_de_atencao": analise.pontos_de_atencao,
+            "sugestoes": analise.sugestoes,
+        }
 
     graph.ai_analysis_timestamp = datetime.now().isoformat()
-    return len(nodes)
+    return analisados
 
 
 _CACHE = None
@@ -169,9 +188,8 @@ def analyze_project(
     graph = GraphBuilder(str(path)).build()
 
     if use_ai:
-        analyzer = build_ai_analyzer(ai_provider, ai_model)
-        count = enrich_with_ai(graph, analyzer)
-        logger.info("IA aplicada a %d funções", count)
+        count = enrich_with_ai(graph, ai_provider, ai_model, cache=cache)
+        logger.info("IA aplicada a %d arquivos", count)
 
     if cache is not None:
         try:
@@ -204,7 +222,8 @@ def export_graph(graph: ProjectGraph, output_dir: str, formats: List[str]) -> Li
         if fmt not in EXPORTERS:
             raise ValueError(f"Formato não suportado: {fmt}")
         exporter_cls, extension = EXPORTERS[fmt]
-        target = out / f"analysis.{extension}"
+        # `docs` produz um diretório de notas, não um arquivo único
+        target = out / ("documentacao" if extension == "docs" else f"analysis.{extension}")
         exporter_cls(graph).export(str(target))
         written.append(target)
 

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+import AiSettings from '@/components/AiSettings.vue'
 import { actions, edgeCounts, store } from '@/store'
 
 const filtro = ref('')
@@ -43,10 +44,19 @@ const estatisticas = computed(() => {
   ]
 })
 
+const TEMAS = [
+  ['auto', '🖥️ Auto'],
+  ['claro', '☀️ Claro'],
+  ['escuro', '🌙 Escuro'],
+]
+
+// Documentação primeiro: é o produto final da extração
 const EXPORTS = [
-  ['json', '📥 JSON'],
+  ['pdf', '📕 PDF'],
+  ['docs', '📚 Docs'],
   ['md', '📝 Markdown'],
   ['html', '🌐 HTML'],
+  ['json', '📥 JSON'],
   ['csv', '📊 CSV'],
 ]
 </script>
@@ -76,6 +86,22 @@ const EXPORTS = [
 
     <section class="controls">
       <label>
+        Tema
+        <div class="temas" role="group" aria-label="Tema">
+          <button
+            v-for="[valor, rotulo] in TEMAS"
+            :key="valor"
+            type="button"
+            :class="{ ativo: store.tema === valor }"
+            :aria-pressed="store.tema === valor"
+            @click="actions.setTema(valor)"
+          >
+            {{ rotulo }}
+          </button>
+        </div>
+      </label>
+
+      <label>
         Visualização
         <select
           :value="store.viewType"
@@ -104,8 +130,11 @@ const EXPORTS = [
       </label>
     </section>
 
+    <AiSettings />
+
     <section v-if="store.analysisId && !store.offline" class="exports">
       <h3>Exportar</h3>
+      <p class="ajuda">PDF e Docs geram a documentação técnica por arquivo.</p>
       <div class="export-buttons">
         <a
           v-for="[format, label] in EXPORTS"
@@ -253,6 +282,39 @@ input[type='search'] {
   background: var(--bg);
   color: var(--text);
   font-size: 0.8rem;
+}
+
+.ajuda {
+  margin: -0.3rem 0 0.5rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.temas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+}
+
+.temas button {
+  padding: 0.35rem 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.temas button:hover {
+  color: var(--text);
+}
+
+.temas button.ativo {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .export-buttons {

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from graphalyzer import __version__, config
-from graphalyzer.api.routes import analysis, cache
+from graphalyzer.api.routes import ai, analysis, cache
 
 
 def create_app() -> FastAPI:
@@ -30,6 +30,7 @@ def create_app() -> FastAPI:
 
     app.include_router(analysis.router)
     app.include_router(cache.router)
+    app.include_router(ai.router)
 
     @app.get("/health", tags=["meta"])
     async def health():

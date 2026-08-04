@@ -2,21 +2,31 @@
 // dimensionados pelo número de conexões, links finos sem seta, rótulo só
 // quando há zoom, e o resto apagado quando algo está em foco.
 
+// O Cytoscape desenha em canvas e não enxerga variável CSS: os valores
+// precisam ser lidos do documento e repassados como cor literal.
+function lerVariavel(nome, alternativa) {
+  if (typeof document === 'undefined') return alternativa
+  const valor = getComputedStyle(document.documentElement)
+    .getPropertyValue(nome)
+    .trim()
+  return valor || alternativa
+}
+
 // No Obsidian a maioria dos nós é neutra e a cor é exceção. Tingir tudo por
 // tipo deixa o grafo com cara de diagrama, não de constelação.
-export const CORES = {
-  fundo: '#191a23',
-  no: '#c3c9dd',
-  file: '#8ab4f8',
-  class: '#e0af68',
-  function: '#c3c9dd',
-  module: '#9aa5ce',
-  link: '#454b66',
-  data_flow: '#4c7a63',
-  calls: '#42597f',
-  import: '#5b5478',
-  destaque: '#f7768e',
-  texto: '#d5dbf0',
+export function cores() {
+  return {
+    fundo: lerVariavel('--grafo-fundo', '#191a23'),
+    no: lerVariavel('--grafo-no', '#c3c9dd'),
+    link: lerVariavel('--grafo-link', '#454b66'),
+    texto: lerVariavel('--grafo-texto', '#d5dbf0'),
+    contorno: lerVariavel('--grafo-contorno', '#e8ecfb'),
+    // Estes não mudam com o tema: são matizes médios, legíveis nos dois
+    data_flow: '#4c7a63',
+    calls: '#42597f',
+    import: '#5b5478',
+    destaque: '#f7768e',
+  }
 }
 
 // Grau -> diâmetro. É a marca visual do Obsidian: o que é muito referenciado
@@ -88,6 +98,8 @@ export function coresPorPasta(nodes, profundidade = null) {
 }
 
 export function cytoscapeStyle() {
+  const CORES = cores()
+
   return [
     {
       selector: 'node',
@@ -114,7 +126,7 @@ export function cytoscapeStyle() {
     // a cor, que agora significa pasta
     {
       selector: 'node[type = "file"]',
-      style: { 'border-width': 2, 'border-color': '#e8ecfb', 'border-opacity': 0.55 },
+      style: { 'border-width': 2, 'border-color': CORES.contorno, 'border-opacity': 0.55 },
     },
     {
       selector: 'edge',
@@ -175,12 +187,15 @@ export function cytoscapeStyle() {
   ]
 }
 
-export const EDGE_LEGEND = [
-  { type: 'data_flow', color: CORES.data_flow, label: 'Fluxo de dados' },
-  { type: 'calls', color: CORES.calls, label: 'Chamada' },
-  { type: 'import', color: CORES.import, label: 'Import' },
-  { type: 'uses', color: CORES.link, label: 'Contém' },
-]
+export function edgeLegend() {
+  const c = cores()
+  return [
+    { type: 'data_flow', color: c.data_flow, label: 'Fluxo de dados' },
+    { type: 'calls', color: c.calls, label: 'Chamada' },
+    { type: 'import', color: c.import, label: 'Import' },
+    { type: 'uses', color: c.link, label: 'Contém' },
+  ]
+}
 
 // Acima deste tamanho, simulação contínua trava o navegador — um projeto real
 // chega fácil a 4 mil nós.

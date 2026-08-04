@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import GraphCanvas from '@/components/GraphCanvas.vue'
-import NodeDetails from '@/components/NodeDetails.vue'
+import NodeModal from '@/components/NodeModal.vue'
 import SidePanel from '@/components/SidePanel.vue'
 import { actions, store } from '@/store'
 
@@ -94,8 +94,11 @@ onMounted(() => {
 
       <div class="workspace">
         <GraphCanvas />
-        <NodeDetails />
       </div>
+
+      <!-- Pop-up sobre o grafo: mostra a função, entradas e saídas sem
+           roubar espaço do canvas, como fazia o painel lateral -->
+      <NodeModal />
     </main>
   </div>
 </template>

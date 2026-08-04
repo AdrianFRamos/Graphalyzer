@@ -28,7 +28,7 @@ class AnalysisCache:
         self._init_db()
 
     # Subir este número descarta caches gravados por versões antigas
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     _ESQUEMA = """
         CREATE TABLE projects (
@@ -37,7 +37,15 @@ class AnalysisCache:
             graph_json TEXT NOT NULL,
             has_ai INTEGER NOT NULL DEFAULT 0,
             timestamp DATETIME NOT NULL
-        )
+        );
+
+        -- Respostas da IA endereçadas pelo conteúdo do pedido: arquivo que não
+        -- mudou não é reanalisado, mesmo que o grafo inteiro tenha sido.
+        CREATE TABLE ai_results (
+            chave TEXT PRIMARY KEY,
+            resultado TEXT NOT NULL,
+            timestamp DATETIME NOT NULL
+        );
     """
 
     def _init_db(self) -> None:
@@ -57,9 +65,9 @@ class AnalysisCache:
                         versao,
                         self.SCHEMA_VERSION,
                     )
-                for tabela in ("projects", "files", "analyses"):
+                for tabela in ("projects", "files", "analyses", "ai_results"):
                     conn.execute(f"DROP TABLE IF EXISTS {tabela}")
-                conn.execute(self._ESQUEMA)
+                conn.executescript(self._ESQUEMA)
                 conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
                 conn.commit()
                 return
@@ -69,7 +77,7 @@ class AnalysisCache:
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='projects'"
             ).fetchone()
             if not existe:
-                conn.execute(self._ESQUEMA)
+                conn.executescript(self._ESQUEMA)
                 conn.commit()
 
     def fingerprint(self, project_path: str) -> str:
@@ -153,6 +161,29 @@ class AnalysisCache:
                     int(has_ai),
                     datetime.now().isoformat(),
                 ),
+            )
+            conn.commit()
+
+    def ai_get(self, chave: str) -> Optional[Dict[str, Any]]:
+        """Resposta da IA já paga para este mesmo conteúdo."""
+        with sqlite3.connect(self.db_path) as conn:
+            linha = conn.execute(
+                "SELECT resultado FROM ai_results WHERE chave = ?", (chave,)
+            ).fetchone()
+
+        if not linha:
+            return None
+        try:
+            return json.loads(linha[0])
+        except json.JSONDecodeError:
+            return None
+
+    def ai_store(self, chave: str, resultado: Dict[str, Any]) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO ai_results (chave, resultado, timestamp) "
+                "VALUES (?, ?, ?)",
+                (chave, json.dumps(resultado, ensure_ascii=False), datetime.now().isoformat()),
             )
             conn.commit()
 

@@ -6,12 +6,12 @@ import cytoscape from 'cytoscape'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
-  CORES,
-  EDGE_LEGEND,
   LIMITE_FISICA_VIVA,
+  cores,
   coresPorPasta,
-  grupoDaPasta,
   cytoscapeStyle,
+  edgeLegend,
+  grupoDaPasta,
   layoutOptions,
 } from '@/graphStyle'
 import { actions, store } from '@/store'
@@ -23,6 +23,7 @@ cytoscape.use(fcose)
 const container = ref(null)
 const legendaAberta = ref(true)
 const pastas = ref([]) // [{ pasta, cor, total }] para a legenda
+const legendaDeArestas = ref(edgeLegend())
 const pastaEmFoco = ref(null)
 let cy = null
 let simulacao = null
@@ -35,8 +36,8 @@ const copiar = (v) => JSON.parse(JSON.stringify(v))
 function aplicarDadosVisuais() {
   // Tamanho vem do número de conexões; cor, da pasta. Sem isso todos os nós
   // ficam iguais e o grafo perde a leitura de "o que é central" e "de onde vem".
-  const cores = coresPorPasta(store.graph.nodes)
-  const profundidade = cores.profundidade
+  const coresDePasta = coresPorPasta(store.graph.nodes)
+  const profundidade = coresDePasta.profundidade
 
   // Legenda ordenada por quantidade: os grupos que dominam o grafo primeiro
   const contagem = new Map()
@@ -45,7 +46,7 @@ function aplicarDadosVisuais() {
     contagem.set(grupo, (contagem.get(grupo) || 0) + 1)
   }
   pastas.value = [...contagem.entries()]
-    .map(([pasta, total]) => ({ pasta, total, cor: cores.get(pasta) }))
+    .map(([pasta, total]) => ({ pasta, total, cor: coresDePasta.get(pasta) }))
     .sort((a, b) => b.total - a.total)
 
   cy.batch(() => {
@@ -53,7 +54,7 @@ function aplicarDadosVisuais() {
       n.data('grau', n.degree(false))
       const grupo = grupoDaPasta(n.data('folder') || '', profundidade)
       n.data('grupoDaPasta', grupo)
-      n.data('corDaPasta', cores.get(grupo) || CORES.no)
+      n.data('corDaPasta', coresDePasta.get(grupo) || cores().no)
     })
   })
 }
@@ -243,6 +244,18 @@ onBeforeUnmount(() => {
   cy?.destroy()
 })
 
+// Trocar o tema exige reaplicar o estilo: o Cytoscape guardou as cores como
+// valores literais no momento em que o estilo foi montado.
+watch(
+  () => store.tema,
+  () => {
+    if (!cy) return
+    cy.style(cytoscapeStyle())
+    legendaDeArestas.value = edgeLegend()
+    aplicarDadosVisuais()
+  },
+)
+
 watch(() => store.graph, render, { deep: true })
 watch(() => store.layout, rodarLayout)
 
@@ -276,7 +289,7 @@ watch(
     </button>
 
     <ul v-if="legendaAberta" class="legend">
-      <li v-for="item in EDGE_LEGEND" :key="item.type">
+      <li v-for="item in legendaDeArestas" :key="item.type">
         <span class="swatch" :style="{ background: item.color }" />
         {{ item.label }}
       </li>
@@ -312,7 +325,7 @@ watch(
   flex: 1;
   min-height: 0;
   /* O fundo escuro é parte da leitura do grafo: pontos claros sobre escuro */
-  background: v-bind('CORES.fundo');
+  background: var(--grafo-fundo);
 }
 
 .canvas {

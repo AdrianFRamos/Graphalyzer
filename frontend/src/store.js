@@ -9,6 +9,10 @@ const STORAGE_KEY = 'graphalyzer:ultima-analise'
 // tela mostra dados incompletos sem nenhum sinal de erro.
 const VERSAO_DO_SNAPSHOT = 2
 
+// Preferência de tema fica fora do snapshot da análise: sobrevive à troca de
+// projeto e a qualquer mudança de formato dos dados.
+const CHAVE_DO_TEMA = 'graphalyzer:tema'
+
 // A análise roda no backend local: sem ele não há como analisar nada novo.
 // O que o PWA guarda é o último resultado, para consulta offline — que é o
 // caso de uso real de uma ferramenta de documentação.
@@ -45,6 +49,8 @@ const state = reactive({
   offline: false,
   restoredFromCache: false,
   _revalidando: false,
+  tema: localStorage.getItem(CHAVE_DO_TEMA) || 'auto', // auto | claro | escuro
+  ia: null, // { configurada, origem, sdk_disponivel, modelo }
 })
 
 const hasAnalysis = computed(() => state.project !== null)
@@ -180,6 +186,35 @@ const actions = {
     state.layout = layout
   },
 
+  async carregarStatusDaIA() {
+    try {
+      state.ia = await api.statusDaIA()
+    } catch {
+      state.ia = null
+    }
+  },
+
+  /** Envia a chave ao servidor local. Nunca é guardada no navegador:
+   *  localStorage é legível por qualquer script da página. */
+  async salvarChaveDaIA(chave) {
+    state.ia = await api.definirChave(chave)
+  },
+
+  async esquecerChaveDaIA() {
+    state.ia = await api.esquecerChave()
+  },
+
+  /** Aplica o tema no <html>; "auto" remove o atributo e devolve ao sistema. */
+  setTema(tema) {
+    state.tema = tema
+    try {
+      localStorage.setItem(CHAVE_DO_TEMA, tema)
+    } catch {
+      // modo privativo: vale só para esta sessão
+    }
+    aplicarTema(tema)
+  },
+
   async selectNode(nodeId) {
     if (!nodeId) return
 
@@ -216,6 +251,15 @@ const actions = {
     return state.analysisId ? api.exportUrl(state.analysisId, format) : null
   },
 }
+
+function aplicarTema(tema) {
+  const raiz = document.documentElement
+  if (tema === 'auto') raiz.removeAttribute('data-theme')
+  else raiz.dataset.theme = tema
+}
+
+// Aplica antes do primeiro render, senão a tela pisca no tema errado
+aplicarTema(state.tema)
 
 export { actions, edgeCounts, hasAnalysis }
 export const store = readonly(state)

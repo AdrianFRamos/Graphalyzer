@@ -43,7 +43,8 @@ COPY src/ ./src/
 # Substitui o build versionado pelo recém-compilado
 COPY --from=frontend /build/src/graphalyzer/web ./src/graphalyzer/web
 
-RUN pip install --no-cache-dir ".[api]"
+# `ai` junto: sem o SDK, a chave que o usuário cola não serve para nada
+RUN pip install --no-cache-dir ".[api,ai]"
 
 # Usuário sem privilégio. /data é a única área gravável; /projects recebe o
 # código a analisar, montado somente leitura.
